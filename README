@@ -1,0 +1,55 @@
+AttachmentCache
+======================
+
+Problem this plugin tries to solve:
+
+attachment_fu is the most well known and most used for file uploads.  It does a great job of making uploads easy.  attachment_fu's modeling is very normalized.  You typically having something like this:
+
+tables: users and pictures
+where: user has_one or has_many pictures
+
+The metadata for the upload is all stored in the pictures table.  This is nice because the picture is really its own separate model and attachemnt fu treats it so.  However, the problem with is that you have the N+1 lookup problem if youre displaying a list of users and their pictures.  List 50 users and their pictures and you will end up with 1 (users query) + 50 (pictures queries) = 51 total queries.
+
+So what this plugin does is it puts the info you need in the parent table (users in case case) so you can get the public_filename w/o having to do the join.
+
+There are 2 main methods in th model files that you want to use:
+
+  belongs_to_attachment_cache
+  has_one_attachment_cache
+
+Example
+=======
+
+In the attachment_fu model:
+
+	class UserPicture < ActiveRecord::Base
+	  belongs_to_attachment_cache :user
+	  has_attachment :thumbnails => { :small => 'crop: 18x18' }
+	end
+
+belongs_to_attachment_cache will generate the after_save and after_destroy callbacks which will update the
+cached_public_filename in the parent model.
+
+In the parent model:
+
+	class User < ActiveRecord::Base
+	  has_one_attachment_cache :picture, :class_name => "UserPicture", :dependent => :destroy
+  end
+
+has_one_attachment_cache will generate picture_exist? and public_filename methods.
+
+It is important to use picture_exist? and public_filename to avoid calling the join.
+
+old way:
+
+	user = User.find(:first)
+	if user.picture
+	  user.picture.pubilc_filename(:small) # this forces a join
+	end
+
+new way:
+
+	user = User.find(:first)
+	if user.picture_exist?
+	  user.pubilc_filename(:small)
+	end
